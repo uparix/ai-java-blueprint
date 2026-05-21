@@ -26,11 +26,28 @@ Coverage HTML report: `target/site/jacoco/index.html`
 ## Quality gates
 
 ```bash
-mvn verify        # tests + JaCoCo coverage thresholds (line 80% / branch 70%)
+mvn verify        # full quality gate
 ```
+
+`verify` enforces, in addition to the unit tests and Gherkin scenarios:
+
+- **JaCoCo** coverage thresholds (line 80% / branch 70%)
+- **CRAP** metric (complexity × coverage)
+- **PMD + CPD** static analysis and duplication detection
+- **SpotBugs** bytecode bug-pattern analysis
+- **forbidden-apis** banned/non-portable JDK API check
+- **ArchUnit** architecture rules (these also run on every `mvn test`)
+
+Compilation additionally runs **Error Prone** and **NullAway** over production
+code, and targets Java 25 via `--release`.
 
 Thresholds live in `pom.xml` under `<properties>` (`coverage.line.min`,
 `coverage.branch.min`, `mutation.threshold`) — tighten them as the project matures.
+
+> **Recreating this setup elsewhere:** [`SPEC.md`](SPEC.md) is a self-contained,
+> project-name-free specification of the entire Maven toolchain — every plugin,
+> version, and the rationale (including the ASM-vs-JDK bytecode-version
+> compatibility notes) needed to reproduce it from scratch.
 
 ## CRAP metric
 
