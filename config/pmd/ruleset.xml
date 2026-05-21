@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="ai-java-blueprint"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+                             https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>
+        Curated PMD 7 ruleset for the blueprint. Favours rules that catch real
+        defects and risky constructs (the things an AI edit is most likely to
+        get subtly wrong) over stylistic preferences, which are left to
+        Checkstyle/Spotless. Tune the excludes as the codebase grows.
+    </description>
+
+    <!-- Likely bugs: null handling, broken control flow, resource leaks. -->
+    <rule ref="category/java/errorprone.xml">
+        <!-- Literals like `== 0` are clear and idiomatic; don't flag them. -->
+        <exclude name="AvoidLiteralsInIfCondition"/>
+        <!-- Serialization convention not relevant to this blueprint. -->
+        <exclude name="MissingSerialVersionUID"/>
+    </rule>
+
+    <!-- Sound defaults: collections, exceptions, API misuse. -->
+    <rule ref="category/java/bestpractices.xml">
+        <!-- Logging-guard rule is noisy without a chosen logging facade. -->
+        <exclude name="GuardLogStatement"/>
+    </rule>
+
+    <!-- Complexity & coupling: the metrics that most help AI-assisted edits. -->
+    <rule ref="category/java/design.xml">
+        <!-- Famously noisy / needs project-specific configuration. -->
+        <exclude name="LawOfDemeter"/>
+        <exclude name="LoosePackageCoupling"/>
+    </rule>
+
+    <rule ref="category/java/performance.xml"/>
+    <rule ref="category/java/multithreading.xml"/>
+    <rule ref="category/java/security.xml"/>
+
+</ruleset>

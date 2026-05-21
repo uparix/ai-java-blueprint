@@ -14,19 +14,38 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>21</maven.compiler.release>
+        <!-- Compile against the Java 25 API and emit Java 25 bytecode (major
+             version 69) even when building on a newer JDK (e.g. 26). The
+             release flag enforces both the bytecode level and the API surface,
+             so newer APIs/language features fail the build. -->
+        <maven.compiler.release>25</maven.compiler.release>
+        <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
 
         <junit.version>5.12.2</junit.version>
         <junit.platform.version>1.12.2</junit.platform.version>
         <assertj.version>3.27.7</assertj.version>
         <mockito.version>5.14.2</mockito.version>
         <cucumber.version>7.22.1</cucumber.version>
-        <archunit.version>1.3.0</archunit.version>
+        <archunit.version>1.4.2</archunit.version>
+        <slf4j.version>2.0.17</slf4j.version>
 
         <surefire.version>3.5.2</surefire.version>
-        <jacoco.version>0.8.12</jacoco.version>
-        <pitest.version>1.17.3</pitest.version>
-        <pitest.junit5.version>1.2.1</pitest.junit5.version>
+        <pmd.plugin.version>3.28.0</pmd.plugin.version>
+        <!-- PMD engine override: 7.24.0 bundles ASM 9.9.1, which can read
+             Java 25/26 bytecode. The plugin's own bundled PMD ships an older
+             ASM that throws "Unsupported class file major version" while
+             resolving types against a newer JDK's classes. -->
+        <pmd.version>7.24.0</pmd.version>
+        <cpd.min.tokens>100</cpd.min.tokens>
+        <jacoco.version>0.8.14</jacoco.version>
+        <pitest.version>1.24.1</pitest.version>
+        <pitest.junit5.version>1.2.3</pitest.junit5.version>
+
+        <!-- Compile-time correctness checks -->
+        <errorprone.version>2.49.0</errorprone.version>
+        <nullaway.version>0.13.4</nullaway.version>
+        <jspecify.version>1.0.0</jspecify.version>
+        <forbiddenapis.version>3.10</forbiddenapis.version>
 
         <!-- Quality gates -->
         <coverage.line.min>0.80</coverage.line.min>
@@ -35,6 +54,14 @@
     </properties>
 
     <dependencies>
+        <!-- JSpecify @Nullable etc. so production code can express nullness
+             that NullAway then verifies. RUNTIME-retained but tiny. -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <version>${jspecify.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -81,10 +108,75 @@
             <version>${archunit.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- No-op SLF4J binding: silences the "No SLF4J providers were found"
+             notice from libraries (ArchUnit etc.) that log via the SLF4J API
+             during the test run. Discards their log output. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-nop</artifactId>
+            <version>${slf4j.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!-- Pin the compiler and target Java 25 explicitly. release=25
+                 makes javac reject any API or language feature newer than
+                 Java 25, so building on JDK 26 still yields a Java 25 artifact.
+
+                 Error Prone + NullAway run as compiler plugins on the
+                 production sources only (the default-compile execution). Test
+                 compilation is left untouched: framework-initialised fields in
+                 the Cucumber/Mockito glue would otherwise trip NullAway. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin.version}</version>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>default-compile</id>
+                        <configuration>
+                            <!-- Fork javac so the JVM opens its internal
+                                 packages to Error Prone (required on JDK 16+). -->
+                            <fork>true</fork>
+                            <annotationProcessorPaths>
+                                <path>
+                                    <groupId>com.google.errorprone</groupId>
+                                    <artifactId>error_prone_core</artifactId>
+                                    <version>${errorprone.version}</version>
+                                </path>
+                                <path>
+                                    <groupId>com.uber.nullaway</groupId>
+                                    <artifactId>nullaway</artifactId>
+                                    <version>${nullaway.version}</version>
+                                </path>
+                            </annotationProcessorPaths>
+                            <compilerArgs>
+                                <arg>-XDcompilePolicy=simple</arg>
+                                <arg>--should-stop=ifError=FLOW</arg>
+                                <arg>-Xplugin:ErrorProne -XepOpt:NullAway:AnnotatedPackages=com.uparix -Xep:NullAway:ERROR</arg>
+                                <!-- Open javac internals to the forked compiler. -->
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
+                                <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
+                                <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
+                                <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Run the unit tests (TDD inner loop) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -161,6 +253,57 @@
                 </executions>
             </plugin>
 
+            <!-- Static analysis (PMD) + copy-paste detection (CPD).
+                 check       -> rule violations from config/pmd/ruleset.xml
+                 cpd-check   -> duplicated code blocks (>= cpd.min.tokens) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-pmd-plugin</artifactId>
+                <version>${pmd.plugin.version}</version>
+                <!-- Run a newer PMD core than the plugin bundles (see pmd.version). -->
+                <dependencies>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-core</artifactId>
+                        <version>${pmd.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-java</artifactId>
+                        <version>${pmd.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-javascript</artifactId>
+                        <version>${pmd.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-jsp</artifactId>
+                        <version>${pmd.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <rulesets>
+                        <ruleset>${project.basedir}/config/pmd/ruleset.xml</ruleset>
+                    </rulesets>
+                    <failOnViolation>true</failOnViolation>
+                    <printFailingErrors>true</printFailingErrors>
+                    <minimumTokens>${cpd.min.tokens}</minimumTokens>
+                    <includeTests>false</includeTests>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>pmd-and-cpd-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                            <goal>cpd-check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Mutation testing -->
             <plugin>
                 <groupId>org.pitest</groupId>
@@ -187,6 +330,36 @@
                     </outputFormats>
                     <timestampedReports>false</timestampedReports>
                 </configuration>
+            </plugin>
+
+            <!-- Ban risky/non-portable JDK APIs (default charset & locale,
+                 sun.* internals, deprecated calls) in production code. Reads
+                 the compiled classes, so it runs in the verify phase. -->
+            <plugin>
+                <groupId>de.thetaphi</groupId>
+                <artifactId>forbiddenapis</artifactId>
+                <version>${forbiddenapis.version}</version>
+                <configuration>
+                    <!-- Don't fail just because the JDK in use is newer than
+                         the bundled signatures know about. -->
+                    <failOnUnsupportedJava>false</failOnUnsupportedJava>
+                    <bundledSignatures>
+                        <bundledSignature>jdk-unsafe</bundledSignature>
+                        <bundledSignature>jdk-deprecated</bundledSignature>
+                        <bundledSignature>jdk-non-portable</bundledSignature>
+                        <bundledSignature>jdk-internal</bundledSignature>
+                    </bundledSignatures>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>forbidden-apis-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <!-- check = main classes only; tests excluded. -->
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
