@@ -46,6 +46,7 @@
         <nullaway.version>0.13.4</nullaway.version>
         <jspecify.version>1.0.0</jspecify.version>
         <forbiddenapis.version>3.10</forbiddenapis.version>
+        <spotbugs.plugin.version>4.9.8.3</spotbugs.plugin.version>
 
         <!-- Quality gates -->
         <coverage.line.min>0.80</coverage.line.min>
@@ -356,6 +357,30 @@
                         <phase>verify</phase>
                         <goals>
                             <!-- check = main classes only; tests excluded. -->
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- SpotBugs: bytecode-level bug-pattern analysis (null derefs,
+                 resource leaks, bad equals/hashCode, etc.). Core 4.9.x bundles
+                 ASM 9.9, so it reads Java 25 bytecode. Runs in verify. -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>${spotbugs.plugin.version}</version>
+                <configuration>
+                    <effort>Max</effort>
+                    <threshold>Medium</threshold>
+                    <includeTests>false</includeTests>
+                    <failOnError>true</failOnError>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotbugs-check</id>
+                        <phase>verify</phase>
+                        <goals>
                             <goal>check</goal>
                         </goals>
                     </execution>
