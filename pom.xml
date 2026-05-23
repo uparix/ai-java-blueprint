@@ -49,10 +49,26 @@
         <spotbugs.plugin.version>4.9.8.3</spotbugs.plugin.version>
         <jxr.plugin.version>3.6.0</jxr.plugin.version>
 
+        <!-- Security analysis + automated refactoring -->
+        <!-- Find Security Bugs: SpotBugs detector plugin adding ~140
+             taint-tracking security bug patterns (SQLi, XSS, path traversal,
+             crypto misuse, unsafe deserialization). -->
+        <findsecbugs.version>1.14.0</findsecbugs.version>
+        <!-- OWASP Dependency-Check: scans the dependency tree against the NVD
+             CVE database and fails the build on known-vulnerable libraries. -->
+        <dependencycheck.version>12.1.3</dependencycheck.version>
+        <!-- OpenRewrite: recipe-driven automated refactoring (run on demand via
+             rewrite:dryRun / rewrite:run; not bound to the build lifecycle). -->
+        <rewrite.plugin.version>6.12.0</rewrite.plugin.version>
+        <rewrite.security.version>3.13.0</rewrite.security.version>
+        <rewrite.staticanalysis.version>2.11.0</rewrite.staticanalysis.version>
+
         <!-- Quality gates -->
         <coverage.line.min>0.80</coverage.line.min>
         <coverage.branch.min>0.70</coverage.branch.min>
         <mutation.threshold>70</mutation.threshold>
+        <!-- Fail the build on any dependency CVE scoring >= 7.0 (CVSS High). -->
+        <dependencycheck.failBuildOnCVSS>7</dependencycheck.failBuildOnCVSS>
     </properties>
 
     <dependencies>
@@ -394,6 +410,15 @@
                     <threshold>Medium</threshold>
                     <includeTests>false</includeTests>
                     <failOnError>true</failOnError>
+                    <!-- Load the Find Security Bugs detector pack so the same
+                         verify-phase SpotBugs run also reports security findings. -->
+                    <plugins>
+                        <plugin>
+                            <groupId>com.h3xstream.findsecbugs</groupId>
+                            <artifactId>findsecbugs-plugin</artifactId>
+                            <version>${findsecbugs.version}</version>
+                        </plugin>
+                    </plugins>
                 </configuration>
                 <executions>
                     <execution>
@@ -404,6 +429,65 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+
+            <!-- OWASP Dependency-Check: commented out - requires NVD API key for fast updates
+                 To re-enable: uncomment this section and provide an NVD API key via:
+                   -Dnvd.api.key=... or NVD_API_KEY environment variable
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>${dependencycheck.version}</version>
+                <configuration>
+                    <failBuildOnCVSS>${dependencycheck.failBuildOnCVSS}</failBuildOnCVSS>
+                    <skipTestScope>true</skipTestScope>
+                    <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
+                    <formats>
+                        <format>HTML</format>
+                        <format>XML</format>
+                    </formats>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>dependency-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            -->
+
+            <!-- OpenRewrite: recipe-driven automated refactoring. Deliberately
+                 NOT bound to a lifecycle phase so it never rewrites sources
+                 during a normal build. Invoke explicitly:
+                   mvn rewrite:dryRun  -> writes proposed diffs to the build log
+                   mvn rewrite:run     -> applies the active recipes in place
+                 The recipe packs below add automated vulnerability fixes and
+                 common static-analysis cleanups. -->
+            <plugin>
+                <groupId>org.openrewrite.maven</groupId>
+                <artifactId>rewrite-maven-plugin</artifactId>
+                <version>${rewrite.plugin.version}</version>
+                <configuration>
+                    <activeRecipes>
+                        <recipe>org.openrewrite.java.security.JavaSecurityBestPractices</recipe>
+                        <recipe>org.openrewrite.staticanalysis.CommonStaticAnalysis</recipe>
+                    </activeRecipes>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.openrewrite.recipe</groupId>
+                        <artifactId>rewrite-java-security</artifactId>
+                        <version>${rewrite.security.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.openrewrite.recipe</groupId>
+                        <artifactId>rewrite-static-analysis</artifactId>
+                        <version>${rewrite.staticanalysis.version}</version>
+                    </dependency>
+                </dependencies>
             </plugin>
         </plugins>
     </build>

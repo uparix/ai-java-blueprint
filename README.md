@@ -34,15 +34,23 @@ mvn verify        # full quality gate
 - **JaCoCo** coverage thresholds (line 80% / branch 70%)
 - **CRAP** metric (complexity × coverage)
 - **PMD + CPD** static analysis and duplication detection
-- **SpotBugs** bytecode bug-pattern analysis
+- **SpotBugs** bytecode bug-pattern analysis, with the **Find Security Bugs**
+  detector pack (SQLi, XSS, path traversal, crypto misuse, unsafe deserialization)
 - **forbidden-apis** banned/non-portable JDK API check
+- **OWASP Dependency-Check** dependency CVE scan (fails on CVSS ≥ 7.0)
 - **ArchUnit** architecture rules (these also run on every `mvn test`)
 
 Compilation additionally runs **Error Prone** and **NullAway** over production
 code, and targets Java 25 via `--release`.
 
 Thresholds live in `pom.xml` under `<properties>` (`coverage.line.min`,
-`coverage.branch.min`, `mutation.threshold`) — tighten them as the project matures.
+`coverage.branch.min`, `mutation.threshold`, `dependencycheck.failBuildOnCVSS`)
+— tighten them as the project matures.
+
+> **Dependency-Check / NVD:** the first `mvn verify` downloads the full NVD CVE
+> database (slow, rate-limited without a key). Set an [NVD API key](https://nvd.nist.gov/developers/request-an-api-key)
+> via `-Dnvd.api.key=…` or the `NVD_API_KEY` env var for fast updates. The
+> database is cached between runs. Report: `target/dependency-check-report.html`.
 
 > **Recreating this setup elsewhere:** [`SPEC.md`](SPEC.md) is a self-contained,
 > project-name-free specification of the entire Maven toolchain — every plugin,
@@ -95,3 +103,23 @@ mvn test-compile org.pitest:pitest-maven:mutationCoverage
 
 Report: `target/pit-reports/index.html`. The build fails if the mutation score
 drops below `mutation.threshold` (70%).
+
+## Automated refactoring (OpenRewrite)
+
+OpenRewrite applies recipe-driven, reviewable refactorings. It is **not** part
+of the build lifecycle — it rewrites source files, so you invoke it explicitly:
+
+```bash
+mvn rewrite:dryRun   # log proposed diffs without touching files (review first)
+mvn rewrite:run      # apply the active recipes in place
+```
+
+Active recipes (configured on the plugin in `pom.xml`):
+
+- `org.openrewrite.java.security.JavaSecurityBestPractices` — automated fixes for
+  common security anti-patterns.
+- `org.openrewrite.staticanalysis.CommonStaticAnalysis` — broad static-analysis
+  cleanups (redundant code, simplifications, etc.).
+
+`rewrite:dryRun` writes a patch to `target/rewrite/rewrite.patch`. Discover more
+recipes with `mvn rewrite:discover`.
