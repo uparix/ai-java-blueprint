@@ -41,7 +41,7 @@ context window communication
          └─────────────────────┐     │          │     ┌───────────────┘ 
                                ↓     ↓          ↓     │
                              ┌──────────────────────────┐
-                             │ logs/agent_meessages.log │
+                             │ logs/agent_messages.log  │
                              │ agent_context/*.json     │ 
                              │ .swarmforge/defects.md   │
                              │ ...                      │
