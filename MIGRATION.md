@@ -9,7 +9,9 @@
 
 This is the minimum required to run the swarm. More can be added later.
 
-## Terminal Setup
+## Terminal Setup (tmux)
+
+Why tmux? It can persist your terminal sessions between reboots.
 
 ```text
 tmux terminal context windows
