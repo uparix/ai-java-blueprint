@@ -3,7 +3,7 @@
 ## Tooling
 
 - [tmux](https://tmux.info/) Terminal Multiplexer
-- [Cucmumber](https://cucumber.io/) Gherkin BDD Testing
+- [Cucumber](https://cucumber.io/) Gherkin BDD Testing
 - [crap-java-maven-plugin](https://github.com/fabian-barney/crap-java) Change Risk Analysis and Predictions
 - [pitest-maven](https://pitest.org/) Real world mutation testing
 
